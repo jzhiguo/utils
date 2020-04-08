@@ -1,0 +1,76 @@
+package com.servicechain.shareservice.util;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import lombok.Data;
+/**
+ * 自定义分页
+ * @author Administrator
+ *
+ */
+public class PageUtil {
+	
+	//自定义分页核心代码
+	public static Page<Order> pageList(List<Order> testlist, int page, int pageSize,String sortColumn){
+		Page<Order> pageOrder = null;
+		Sort sort = Sort.by(Sort.Direction.DESC, sortColumn);//"createdDate"
+		Pageable pageable = PageRequest.of(page-1, pageSize, sort);		
+		// 当前页第一条数据在List中的位置
+		int start = (int)pageable.getOffset();
+		// 当前页最后一条数据在List中的位置  
+		int end = (start + pageable.getPageSize()) > testlist.size() ? testlist.size() : ( start + pageable.getPageSize());
+		pageOrder = new PageImpl<Order>(testlist.subList(start, end), pageable, testlist.size());
+		return pageOrder;
+	}
+
+	public static void main(String[] args) {
+		//测试list
+		List<Order> testlist = new ArrayList<Order>();
+		Order order = new Order();
+		//第一条测试数据
+		order.setProductId("207ea2dc-deaa-4139-a08b-1b879bd22573");
+		order.setProductName("订单测试商品名称1");
+		order.setUserId("8f4dee00-5d7c-4d7e-aaed-f2b7392deed4");
+		order.setPrice(new BigDecimal(91.00));
+		order.setCreatedDate(LocalDateTime.now());
+		testlist.add(order);
+		//第二条测试数据
+        order = new Order();
+		order.setProductId("207ea2dc-deaa-4139-a08b-1b879bd22572");
+		order.setProductName("订单测试商品名称2");
+		order.setUserId("8f4dee00-5d7c-4d7e-aaed-f2b7392deed2");
+		order.setPrice(new BigDecimal(92.00));
+		order.setCreatedDate(LocalDateTime.now());
+		testlist.add(order);
+		System.out.println("list.size():"+testlist.size());
+		for (int i = 0; i < testlist.size(); i++) {
+			Order orderResult = new Order();
+			orderResult = testlist.get(i);
+			System.out.println("orderResult:"+orderResult);
+		}
+		//测试第一页,10条
+		int page = 1;
+		int pageSize = 10;
+		String sortColumn = "createdDate";
+		
+		pageList(testlist,page,pageSize,sortColumn);
+	}
+}
+
+@Data
+public class Order implements Serializable {
+	private String productId; 
+	private String productName; 
+	private String userId;
+	private BigDecimal price;
+	private LocalDateTime createdDate;
+}
