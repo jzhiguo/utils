@@ -1,0 +1,159 @@
+package com.servicechain.shareservice.util;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
+//基于RestTemplate调第三方接口的工具类：post/get请求
+public class HttpUtils {
+	
+	//调用test
+	public static void main(String[] args) {
+		MultiValueMap<String, Object> linkedMultiValueMap = new LinkedMultiValueMap<String, Object>();
+		linkedMultiValueMap.add("String","Object");
+		String post = postRequest("https://www.jb51.net/article/158766.htm",linkedMultiValueMap,"");
+		System.out.println("post请求的结果1:"+post);
+		
+		Map<String, Object> hashMap = new HashMap<String, Object>();
+		hashMap.put("String","Object");
+//		String postResult = postRequest("https://www.jb51.net/article/158766.htm",hashMap,"");
+//		System.out.println("post请求的结果2:"+post);
+		
+		String getResult = getRequest("https://www.jb51.net/article/158766.htm","","");
+		System.out.println("get请求的结果:"+getResult);
+	}
+	
+    /**
+     * 调第三方接口:post请求;json的方式提交
+     * @param url       目的url
+     * @param params    发送的参数
+     * @return  AdToutiaoJsonTokenData
+     */
+    public static String postRequest(String url, MultiValueMap<String, Object> params, String token){
+        RestTemplate client = new RestTemplate();
+        //新建Http头，add方法可以添加参数
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("accept", "*/*");
+        headers.add("Authorization",token);
+        //设置请求发送方式
+        HttpMethod method = HttpMethod.POST;
+        //提交方式:根据需要改变,常用的有三种
+        headers.setContentType(MediaType.APPLICATION_JSON);// 以json的方式提交
+//        headers.setContentType(MediaType.MULTIPART_FORM_DATA);// 以表单的方式提交
+//        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        //将请求头部和参数合成一个请求
+        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(params, headers);
+        //执行HTTP请求，将返回的结构使用String 类格式化（可设置为对应返回值格式的类）
+        ResponseEntity<String> response = client.exchange(url, method, requestEntity,String.class);
+
+        return response.getBody();
+    }
+
+    /**
+     * 调第三方接口:post请求;表单的方式提交
+     * @param url
+     * @param jsonObject
+     * @param token
+     * @return
+     */
+	public static String getRequest(String url, String jsonObject,String token) {
+		RestTemplate client = new RestTemplate();
+        //新建Http头，add方法可以添加参数
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("accept", "*/*");
+        headers.add("Authorization",token);
+        //设置请求发送方式
+        HttpMethod method = HttpMethod.GET;
+        // 以表单的方式提交
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        //将请求头部和参数合成一个请求
+        HttpEntity<String> requestEntity = new HttpEntity<>(jsonObject, headers);
+        //执行HTTP请求，将返回的结构使用String 类格式化（可设置为对应返回值格式的类）
+        ResponseEntity<String> response = client.exchange(url, method, requestEntity,String.class);
+
+        return response.getBody();
+	}
+        
+    /**
+	 * 原生的用HttpUrL:post或get方式调第三方接口
+     * @param pathUrl
+     */
+    public static String doPostOrGet(String pathUrl, String data){
+        OutputStreamWriter out = null;
+        BufferedReader br = null;
+        String result = "";
+        try {
+            URL url = new URL(pathUrl);
+            //打开和url之间的连接
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            //请求方式
+            conn.setRequestMethod("POST");
+//            conn.setRequestMethod("GET");
+
+            //设置通用的请求属性
+            conn.setRequestProperty("accept", "*/*");
+            conn.setRequestProperty("connection", "Keep-Alive");
+            conn.setRequestProperty("user-agent", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)");
+            conn.setRequestProperty("Content-Type", "application/json;charset=utf-8");
+
+            //DoOutput设置是否向httpUrlConnection输出，DoInput设置是否从httpUrlConnection读入，此外发送post请求必须设置这两�??
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
+
+            /**
+             * 下面的三句代码，就是调用第三方http接口
+             */
+            //获取URLConnection对象对应的输出流
+            out = new OutputStreamWriter(conn.getOutputStream(), "UTF-8");
+            //发送请求参数即数据
+            out.write(data);
+            //flush输出流的缓冲
+            out.flush();
+
+            /**
+             * 下面的代码相当于，获取调用第三方http接口后返回的结果
+             */
+            //获取URLConnection对象对应的输入流
+            InputStream is = conn.getInputStream();
+            //构建一个字符流缓存
+            br = new BufferedReader(new InputStreamReader(is));
+            String str = "";
+            while ((str = br.readLine()) != null){
+                result += str;
+            }
+            System.out.println(result);
+            //关闭链接
+            is.close();
+            //断开连接，disconnect是在底层tcp socket链接空闲时才切断，如果正在被其他线程使用就不切断
+            conn.disconnect();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }finally {
+            try {
+                if (out != null){
+                    out.close();
+                }
+                if (br != null){
+                    br.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return result;
+    }
+}
