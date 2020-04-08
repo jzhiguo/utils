@@ -1,0 +1,150 @@
+package com.servicechain.shareservice.util;
+
+import java.io.UnsupportedEncodingException;
+import java.security.*;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.HashMap;
+import java.util.Map;
+//import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import org.springframework.util.Base64Utils;
+/**
+ * 1.Rsa签名:MD5加密+base64Encode
+ * 2.生成密钥对(公钥、私钥)
+ * 3.SHA-256加密
+ * @author Administrator
+ *
+ */
+@Component
+public class RsaUtils {
+	
+	private final String KEY_ALGORITHM = "RSA";
+	private final String SIGN_ALGORITHM = "MD5withRSA";
+	private  final String PRIVATE_KEY = "MIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGBAKOFZwG/JnG4U7j2efaz87G2URl+ptFCFJKyIAq9YDUKR8xzbp3s8OJeUN2D3LnFkyZTKRTbc5ckHJd4vUXNbw23znt2KVLKuoLkvDTEJuswxkt8/8f8SGeAv4lSyN9S6BA/Y/8jN+tuprla7bgECrkV9NnnSrNHU5+AUl6lBE8NAgMBAAECgYAJtf5sCCIMVtoB/gE4OW+beixOy0q02qvGGnX0rVJtU/L3nVNQZaXYi6lZvl75WVZnzECAUJgIvchE5pK29oBFw2u8/0jVLPD2ep0cFinaLkjb1ut/jz4J/vQ4PHg78af2O+pzGGKgfVPLnN0zbTDTHPMs1Ymwr5mzALZjP5hyAQJBAP2S6CT/jtf8I8pihEjEF5Iy6gLnyAuLbfhJwjV8MihJRHEcIgMroYmehOXqACQ5gDYYaXTsiXiKC8qUwtlgQuECQQClFeyS0ZhrXh0Xe7cbfR1HjTCN3r4/TRL9IeakPab9or/5YoCW246RWKcggTMc10Dp+LyzMDyqldZhMWB3d72tAkBePsm1Zp6KvBX5VKBiAy/XkMDVD5yUXeAjlhZulph1zLV5bMFfeEnzwk0WvuAKlqyGbpBTes6lVHmJc7zv2g1BAkEAovUFVdg3kKSSKwAgO65BHMQuTZy2R14ZhG3WcgG5uVzSC6ZEMKYCEU9lihx/C9UfatXxzx+qgujteXt4MfWs8QJAZIslGx+bxZCxUBXhg7tyI2dm7M24LEYswRaUSOIVoBNAogRzE7dGv2dEAhqHrZQF3SC7H8ZEXE4GysvTyDCQFg==";
+	private  final String PUBLIC_KEY = "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCjhWcBvyZxuFO49nn2s/OxtlEZfqbRQhSSsiAKvWA1CkfMc26d7PDiXlDdg9y5xZMmUykU23OXJByXeL1FzW8Nt857dilSyrqC5Lw0xCbrMMZLfP/H/EhngL+JUsjfUugQP2P/Izfrbqa5Wu24BAq5FfTZ50qzR1OfgFJepQRPDQIDAQAB";
+//	@Value("${share.rsaUtilPrivateKey}")
+//	private String PRIVATE_KEY;	
+//	@Value("${share.rsaUtilPublicKey}")
+//	private String PUBLIC_KEY;
+	
+	/**
+	 * demo
+	 */
+//	@Test
+	public void testRSA() throws Exception {
+		String AES_KEY = "pjbbAvaE8faDOjYvqMPIMQ==";
+		// 转账
+		String origin = "{\"amount\":10,\"from\":\"admin@newtouch.com\",\"to\":\"san.zhang@newtouch.com\"}";
+		// 开户
+//		String origin = "{\"userId\":\"san.zhang@newtouch.com\"}";
+		// 上传确权信息
+//		String origin = "{\"owner\":\"san.zhang@newtouch.com\",\"issuer\":\"san.zhang@newtouch.com\",\"hash\":\"ab0xjfoejfiojwefjwejo32423414joj40xjfoejfiojwefjwejo32423414joj40xjfoejfiojwefjwejo32423414joj40xjfoejfiojwefjwejo32423414joj4c\"}";
+		// 查询确权信息
+//		String origin = "{\"hash\":\"ab0xjfoejfiojwefjwejo32423414joj40xjfoejfiojwefjwejo32423414joj40xjfoejfiojwefjwejo32423414joj40xjfoejfiojwefjwejo32423414joj4c\"}";
+		
+		String str1 = AesUtils.encrypt(origin, AES_KEY);
+		System.out.println("AES加密后：\r\t" + str1);
+		
+		String str2 = sign(str1.getBytes());
+		System.out.println("私钥签名：\r\t" + str2);
+		
+		boolean publicResult = verify(str1.getBytes(), str2);
+		System.out.println("公钥验签：\r\t" + publicResult);//true
+		
+		String str4 = AesUtils.decrypt(str1, AES_KEY); 
+		System.out.println("AES解密：\r\t" +str4);//{"amount":10,"from":"admin@newtouch.com","to":"san.zhang@newtouch.com"}
+	}
+
+	/**
+	 * 私钥签名
+	 */
+	public  String sign(byte[] data) throws Exception {
+		PrivateKey privateKey = getPrivateKey();
+		Signature signature = Signature.getInstance(SIGN_ALGORITHM);
+		signature.initSign(privateKey);
+		signature.update(data);
+		return base64Encode(signature.sign());
+	}
+
+	/**
+	 * 公钥验签
+	 */
+	public  boolean verify(byte[] data, String sign) throws Exception {
+		PublicKey publicKey = getPublicKey();
+		Signature signature = Signature.getInstance(SIGN_ALGORITHM);
+		signature.initVerify(publicKey);
+		signature.update(data);
+		return signature.verify(base64Decode(sign));
+	}
+
+	private  String base64Encode(byte[] src) {
+		return Base64Utils.encodeToString(src);
+	}
+
+	private  byte[] base64Decode(String src) {
+		return Base64Utils.decodeFromString(src);
+	}
+
+	private  PrivateKey getPrivateKey() throws Exception {
+		byte[] key = base64Decode(PRIVATE_KEY);//PRIVATE_KEY可以随机生成;也可以约定定值
+		PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(key);
+		KeyFactory keyFactory = KeyFactory.getInstance(KEY_ALGORITHM);
+		return keyFactory.generatePrivate(keySpec);
+	}
+
+	private  PublicKey getPublicKey() throws Exception {
+		byte[] key = base64Decode(PUBLIC_KEY);
+		X509EncodedKeySpec keySpec = new X509EncodedKeySpec(key);
+		KeyFactory keyFactory = KeyFactory.getInstance(KEY_ALGORITHM);
+		return keyFactory.generatePublic(keySpec);
+	}
+	
+	/**
+	 * 生成密钥对(公钥、私钥)
+	 */
+	public  String generateKeyPair() throws Exception {
+		Map<String, String> keyMap = new HashMap<String, String>();
+		KeyPairGenerator generator = KeyPairGenerator.getInstance(KEY_ALGORITHM);
+		generator.initialize(1024);
+		KeyPair keyPair = generator.generateKeyPair();
+		RSAPublicKey publicKey = (RSAPublicKey) keyPair.getPublic();
+		RSAPrivateKey privateKey = (RSAPrivateKey) keyPair.getPrivate();
+		System.out.println("PUBLIC_KEY=" + base64Encode(publicKey.getEncoded()));
+		System.out.println("PRIVATE_KEY=" + base64Encode(privateKey.getEncoded()));
+		String result = "PUBLIC_KEY=" + base64Encode(publicKey.getEncoded())+";PRIVATE_KEY=" + base64Encode(privateKey.getEncoded());
+		return result;
+	}
+
+	//SHA-256加密
+	public  String getSHA256StrJava(String str){
+		MessageDigest messageDigest;
+		String encodeStr="";
+		try{
+			messageDigest= MessageDigest.getInstance("SHA-256");
+			messageDigest.update(str.getBytes("UTF-8"));
+			encodeStr=byte2Hex(messageDigest.digest());
+		}catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+		return encodeStr;
+	}
+	private  String byte2Hex(byte[] bytes){
+		StringBuffer stringBuffer = new StringBuffer();
+		String temp=null;
+		for(int i=0;i<bytes.length;i++){
+			temp = Integer.toHexString(bytes[i] & 0xFF);
+			if (temp.length()==1){
+				stringBuffer.append("0");
+			}
+			stringBuffer.append(temp);
+		}
+		return stringBuffer.toString();
+	}
+
+}
