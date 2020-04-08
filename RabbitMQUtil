@@ -1,0 +1,81 @@
+package com.servicechain.shareservice.util;
+
+import org.json.JSONException;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import com.servicechain.shareservice.exceptions.BusinessException;
+import lombok.extern.slf4j.Slf4j;
+import net.minidev.json.JSONObject;
+/**
+ * 消息队列RabbitMQ:发送消息、消费消息
+ * @author Administrator
+ *
+ */
+@Slf4j
+public class RabbitMQUtil {
+	
+	@Autowired
+	private RabbitTemplate rabbitTemplate;
+	
+	//.yml配置中queueName: USER_BEHAVIOR_QUEUES
+	@Value("${queueName}")
+	private String queueName;
+	
+	//主方法测试
+//	public static void main(String[] args) {
+//		saveBehavioToMQ("8f4dee00-5d7c-4d7e-aaed-f2b7392deed4", "san.zhang@newtouch.com", "", ""
+//				, "207ea2dc-deaa-4139-a08b-1b879bd22573", "26");//发布行为
+	
+//	}
+	
+	//行为存MQ--生产者
+	public void saveBehavioToMQ(String userId, String acountNo, String payeeId, String payeeAcountNo, String productId,
+			String behavioCode) {
+    	log.info("进入行为存MQ方法----saveBehavioToMQ,入参:userId>>>{},acountNo>>>{},productId>>>{},payeeId>>>{},payeeAcountNo>>>{},behavioCode>>>{}"
+       		 ,userId,acountNo,productId,payeeId,payeeAcountNo,behavioCode);
+    	if (null == userId || null == acountNo || null == behavioCode || "".equals(userId) || "".equals(acountNo) || "".equals(behavioCode)) {
+    		log.warn("RabbitMQUtil--saveBehavioToMQ--3个必传入参{userId,acountNo,behavioCode}为空");
+        	throw new BusinessException("RabbitMQUtil--saveBehavioToMQ--3个必传入参{userId,acountNo,behavioCode}为空");
+		}
+    	try {//net.minidev.json.JSONObject
+			JSONObject mqJson = new JSONObject();
+			mqJson.put("userId", userId);//登录人id
+			mqJson.put("userName", acountNo);//登录账号
+			mqJson.put("payeeId", payeeId);//收款人id
+			mqJson.put("payeeName", payeeAcountNo);//收款人登录账号
+			mqJson.put("productId", productId);
+			mqJson.put("behavioCode", behavioCode);//行为类型
+			MessageProperties messageProperties = new MessageProperties();
+	        messageProperties.setContentType("text/plain");
+			Message message = new Message(mqJson.toJSONString().getBytes(), messageProperties);
+			this.rabbitTemplate.send(queueName,message);//队列名,消息
+			log.info("RabbitMQUtil--saveBehavioToMQ()--queueName:{},--message:{}",mqJson.toJSONString(),message);
+		} catch (Exception e) {
+			log.warn("RabbitMQUtil--saveBehavioToMQ----存入MQ异常:{}",e.getMessage());
+        	throw new BusinessException("RabbitMQUtil--saveBehavioToMQ----存入MQ异常");
+		}
+	}
+	
+	//消费者,queueName: USER_BEHAVIOR_QUEUES
+	@RabbitListener(queues = "USER_BEHAVIOR_QUEUES")
+	public void handleMessage(String message) {
+		log.info("RabbitMQUtil--handleMessage---消费者消费消息入参:{}",message);
+		try {
+			org.json.JSONObject jsonobject=new org.json.JSONObject(message);
+			//获取使用参数
+			System.out.println("消费者消费消息参数userId:"+jsonobject.getString("userId"));
+			System.out.println("消费者消费消息参数userName:"+jsonobject.getString("userName"));
+			System.out.println("消费者消费消息参数payeeId:"+jsonobject.getString("payeeId"));
+			System.out.println("消费者消费消息参数payeeName:"+jsonobject.getString("payeeName"));
+			System.out.println("消费者消费消息参数productId:"+jsonobject.getString("productId"));
+			System.out.println("消费者消费消息参数behavioCode:"+jsonobject.getString("behavioCode"));
+		} catch (JSONException e) {
+			log.info("RabbitMQUtil--handleMessage----消费者消费消息--异常:{}",e.getMessage());
+			throw new BusinessException("RabbitMQUtil--handleMessage----消费者消费消息--异常");
+		}		
+	}
+}
