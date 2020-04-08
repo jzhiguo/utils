@@ -1,0 +1,331 @@
+package com.servicechain.shareservice.util;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URLEncoder;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+import javax.persistence.ManyToOne;
+import javax.servlet.http.HttpServletRequest;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import org.hibernate.annotations.GenericGenerator;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
+import com.servicechain.shareservice.exceptions.BusinessException;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.extern.slf4j.Slf4j;
+/**
+ * 1.多个文件上传到服务器
+ * 2.单个附件下载
+ * 3.物理删除附件
+ * 4.删除目录及目录下的文件
+ * 5.批量附件上传[上传文件夹]
+ * 6.批量附件下载[下载文件夹压成.zip压缩包]
+ *
+ * @author Administrator
+ *
+ */
+@Slf4j
+public class FileUtil {
+
+	//附件配置及约束
+//	## MULTIPART (MultipartProperties)
+//	spring.servlet.multipart.enabled=true# 开启 multipart 上传功能
+//	spring.servlet.multipart.file-size-threshold=2KB# 文件写入磁盘的阈值
+//	spring.servlet.multipart.max-file-size=200MB# 最大文件大小
+//	spring.servlet.multipart.max-request-size=215MB# 最大请求大小
+
+	//对文件大小的限制,加在.yml配置文件中
+	servlet:
+	    multipart:
+	      enabled: true
+	      file-size-threshold: 2KB    
+	      max-file-size: 200MB 
+	      max-request-size: 215MB
+//	## 文件存储所需参数,所有通过 REST APIs 上传的文件都将存储在此目录下
+	file.upload-dir=./uploads
+//	file.upload-dir = E:/file //本地路径test
+	
+//	@Value("${file.upload-dir}")
+//	private String fileUploadDir;//如E:/file
+	
+	Path fileStorageLocation;//文件存储的地址
+	
+	@Data
+	@EqualsAndHashCode(callSuper = true)
+	@Entity(name = "t_file_info")
+	public class FileInfo {//文件对象
+	    @Id
+	    @GeneratedValue(generator = "uuid2")
+	    @GenericGenerator(name = "uuid2", strategy = "uuid2")
+	    @Column(columnDefinition = "varchar(36)")
+		private String id;	
+	    @NotNull
+	    @NotBlank
+		private String fileName;
+		private String fileDir;		
+		private String serverFileName;	
+		private String fileType;
+		private String fileSize;
+		@CreatedDate
+	    private LocalDateTime createdDate;		
+	}
+	
+	/**
+	 * 多个文件上传到服务器
+	 * @param multipartFiles
+	 * @param fileParentDir
+	 * @return
+	 */
+	public List<FileInfo> uploadFiles(MultipartFile[] multipartFiles, String fileParentDir) {
+	    List<FileInfo> fileInfoList = new ArrayList<>();
+		FileInfo fileInfoResult = null;
+
+		Date date = new Date(System.currentTimeMillis());
+		SimpleDateFormat sdfDate = new SimpleDateFormat("yyyyMMdd");
+		SimpleDateFormat sdfTime = new SimpleDateFormat("yyyyMMddHHmmssSSS");//毫秒17位
+		String nowDate = sdfDate.format(date);
+		String nowTime = sdfTime.format(date);
+		String fileDir = null;
+	    if (null != multipartFiles && multipartFiles.length>0) {
+        	//1.附件上传到服务器
+        	try {
+        		//按日期动态新增文件夹
+        		fileDir = fileParentDir + "/" + nowDate;
+        		log.info("含有日期的动态fileDir:{}",fileDir);
+        		//获取文件路径
+        		fileStorageLocation = Paths.get(fileDir).toAbsolutePath().normalize();
+        		Resource resource = new UrlResource(fileStorageLocation.toUri());
+        		//判断文件路径是否存在
+        		//确保有新增文件夹的权限
+      	        if(!resource.exists()) {
+      	        	Files.createDirectories(fileStorageLocation);
+      	        }
+        	} catch (IOException e) {
+        		throw new BusinessException("Sorry! Filename contains invalid path sequence ");
+        	}
+			for (int i = 0; i < multipartFiles.length; i++) {
+				MultipartFile multipartFile = multipartFiles[i];				
+				String originalFileName = StringUtils.cleanPath(multipartFile.getOriginalFilename());
+				log.info("原文件名称originalFileName:{}",originalFileName);
+				String suffix = originalFileName.substring(originalFileName.lastIndexOf("."));//获取"."和文件类型,如.jpg
+				String serverFileName = nowTime + suffix;
+				log.info("服务器存的文件名称serverFileName:{}",serverFileName);//服务器存文件名称,格式如：时间戳.jpg
+				String fileType = suffix.substring(1);
+				log.info("文件类型fileType:{}",fileType);
+				String fileSize = StringUtils.cleanPath(multipartFile.getSize()+"");
+				log.info("文件大小fileSize:{}",fileSize);
+				if(originalFileName.contains("..")) {
+			        throw new BusinessException("Sorry! Filename contains invalid path sequence " + originalFileName);
+			    }
+				try {
+				      Path targetLocation = fileStorageLocation.resolve(serverFileName);//将文件复制到目标位置 (用相同名称替换现有文件)
+				      Files.copy(multipartFile.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+			    } catch (IOException ex) {
+			    	throw new BusinessException("Could not store file " + originalFileName + ". Please try again!", ex);
+			    }
+
+				//2.附件信息入库
+			    FileInfo fileInfo = new FileInfo();
+			    fileInfo.setFileName(originalFileName);
+			    fileInfo.setFileDir(fileDir);
+			    fileInfo.setServerFileName(serverFileName);
+			    fileInfo.setFileType(fileType);
+			    fileInfo.setFileSize(fileSize);
+//    			fileInfoResult = fileInfoRepository.save(fileInfo);
+//			    if (null==fileInfoResult) {
+//  					throw new BusinessException("附件信息存储到数据库--异常");
+//  				}
+			    fileInfoList.add(fileInfoResult);
+			}
+		}
+		return fileInfoList;		
+	 }
+	
+	/**
+	 * 单个附件下载
+	 * @param fileUploadDir
+	 * @param serverFileName
+	 * @param originalFileName
+	 * @param request
+	 * @return
+	 */
+	public ResponseEntity<Resource> downloadFile(String fileUploadDir,String serverFileName, String originalFileName, HttpServletRequest request) {
+		log.info("下载----服务器上附件的名称serverFileName:{}",serverFileName);
+		log.info("下载----原附件名称----originalFileName:{}",originalFileName);
+		Resource resource = this.loadFileAsResource(fileUploadDir, serverFileName);
+		log.info("下载----resource:{}",resource);
+	    String contentType = null;// 尝试确定附件的内容类型
+	    try {
+	    	String userAgent = request.getHeader("user-agent").toLowerCase();
+            if (userAgent.contains("msie") || userAgent.contains("like gecko")) {
+                // win10 ie edge 浏览器 和其他系统的ie
+            	originalFileName = URLEncoder.encode(originalFileName, "UTF-8");
+            } else {
+            	originalFileName = new String(originalFileName.getBytes("UTF-8"), "iso-8859-1");
+            }
+	        contentType = request.getServletContext().getMimeType(resource.getFile().getAbsolutePath());
+	        log.info("下载----附件的内容:{}",resource.getFile());
+	        log.info("下载----原附件名称:{}",originalFileName);
+	    } catch (IOException ex) {
+	        log.info("Could not determine file type.");
+	        throw new BusinessException("Could not determine file type.");
+	    }
+	    if(contentType == null) {//如果无法确定类型，则回退到默认内容类型
+	        contentType = "application/octet-stream";
+	    }
+	    return ResponseEntity.ok()
+	        .contentType(MediaType.parseMediaType(contentType))
+	        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + originalFileName + "\"")
+	        .body(resource);
+	}
+	
+	/**
+	 * 加载附件
+	 * @param fileUploadDir
+	 * @param fileName
+	 * @return
+	 */
+    public Resource loadFileAsResource(String fileUploadDir, String fileName) {
+	    try {
+	      this.fileStorageLocation = Paths.get(fileUploadDir).toAbsolutePath().normalize();
+	      Path filePath = this.fileStorageLocation.resolve(fileName).normalize();
+	      log.info("loadFileAsResource()----filePath:{}",filePath);
+	      Resource resource = new UrlResource(filePath.toUri());
+	      if(resource.exists()) {
+	         return resource;
+	      } else {
+	         throw new BusinessException("File not found " + fileName);
+	      }
+	    } catch (MalformedURLException ex) {
+	    	throw new BusinessException("File not found " + fileName, ex);
+	    }
+   }
+    
+    /**
+     * 物理删除附件
+     * @param fileName 服务器上的文件名称
+     */
+    public boolean deleteFileInfo(String fileName) {
+    	//1.删除数据库中的记录
+//		try {
+//			fileInfoRepository.delete(fileInfoResult);
+//		} catch (Exception e) {
+//			log.warn("删除附件异常--e:{}, deleteFileId:{}" ,e.getMessage(),deleteFileId);
+//			throw new BusinessException("删除附件异常");
+//		}
+    	//2.删除服务器上的附件或文件夹
+    	File file = new File(fileName);
+        if (!file.exists()) {
+        	log.info("FileUtil---deleteFileInfo()----fileName:{}--文件在服务器上不存在!",fileName);
+        } else {
+            if (file.isFile()) {
+            	return deleteFile(fileName);
+            } else {
+//            	return deleteDirectory(fileDir);
+            }
+        }
+		return false;
+	}
+    
+    /**
+     * 
+     * 删除附件
+     * 
+     * @param fileName 被删除的文件名
+     * @return 如果删除成功，则返回true，否则返回false
+     */
+    public static boolean deleteFile(String fileName) {
+        File file = new File(fileName);
+        if (file.exists() && file.isFile()) {
+            if (file.delete()) {
+            	log.info("FileUtil---deleteFile()--删除文件fileName:{}成功!",fileName);
+                return true;
+            } else {
+            	log.info("FileUtil---deleteFile()--删除文件fileName:{}失败!",fileName);
+                return false;
+            }
+        } else {
+        	log.info("FileUtil---deleteFile()--fileName:{}服务器上不存在此文件!",fileName);
+            return true;
+        }
+    }
+    
+    /**
+     * 
+     * 删除目录及目录下的文件
+     * 
+     * @param dirName 被删除的目录所在的文件路径
+     * @return 如果目录删除成功，则返回true，否则返回false
+     */
+    public static boolean deleteDirectory(String dirName) {
+        String dirNames = dirName;
+        if (!dirNames.endsWith(File.separator)) {
+            dirNames = dirNames + File.separator;
+        }
+        File dirFile = new File(dirNames);
+        if (!dirFile.exists() || !dirFile.isDirectory()) {
+        	log.info("FileUtil---deleteDirectory()--dirNames:{}服务器上不存在此目录!",dirNames);
+            return true;
+        }
+        boolean flag = true;
+        // 列出全部文件及子目录
+        File[] files = dirFile.listFiles();
+        for (int i = 0; i < files.length; i++) {
+            // 删除子文件
+            if (files[i].isFile()) {
+                flag = deleteFile(files[i].getAbsolutePath());
+                // 如果删除文件失败，则退出循环
+                if (!flag) {
+                    break;
+                }
+            }
+            // 删除子目录
+            else if (files[i].isDirectory()) {
+                flag = deleteDirectory(files[i].getAbsolutePath());
+                // 如果删除子目录失败，则退出循环
+                if (!flag) {
+                    break;
+                }
+            }
+        }
+ 
+        if (!flag) {
+        	log.info("FileUtil---deleteDirectory()--删除目录失败!");
+            return false;
+        }
+        // 删除当前目录
+        if (dirFile.delete()) {
+        	log.info("FileUtil---deleteDirectory()--删除目录dirName:{}成功!",dirName);
+            return true;
+        } else {
+        	log.info("FileUtil---deleteDirectory()--删除目录dirName:{}失败!",dirName);
+            return false;
+        }
+    }
+    
+    //批量附件上传[上传文件夹]
+    
+    //批量附件下载[下载文件夹压成.zip压缩包]
+    
+}
