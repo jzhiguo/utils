@@ -1,0 +1,200 @@
+package com.servicechain.shareservice.util;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
+import javax.validation.constraints.DecimalMin;
+import javax.validation.constraints.NotBlank;
+import org.apache.commons.lang3.StringEscapeUtils;
+import org.json.JSONException;
+import org.springframework.web.multipart.MultipartFile;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.TypeReference;
+import com.alibaba.fastjson.serializer.SerializerFeature;
+import com.servicechain.shareservice.exceptions.BusinessException;
+import com.servicechain.shareservice.exceptions.NotFoundException;
+import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
+/**
+ * 解析json工具类：
+ * 一、对json串中--反斜线转译
+ * 二、仅判断code值
+ * 三、判断code值,并将content转为Java对象(简单的对象，从json的content中取)--org.json.JSONObject
+ * 四、json转为List--om.alibaba.fastjson.JSON.parseArray()
+ * 五、json转为复杂的Java对象--com.alibaba.fastjson.JSONObject.parseObject
+ * 
+ * @author Administrator
+ *
+ */
+@Slf4j
+public class ParseJSONUtil {//解析json
+
+//	json处理器:Gson、Jackson、fastjson
+	
+	//一、对json串中--反斜线转译
+	public String translateBackslash(Object obj) {		
+		String jsonStr = com.alibaba.fastjson.JSON.toJSONString(obj);//对象转化为json字符串
+//		String jsonStr = com.alibaba.fastjson.JSON.toJSONString(map, SerializerFeature.WriteMapNullValue);//转义的对象为map时，防止个别value为空
+		String translateJson = StringEscapeUtils.unescapeJava(jsonStr);
+//		String translateJson = json.replaceAll("\\\\","");//反斜线转译方式二
+		String subJson = translateJson.substring(1, translateJson.length() - 1);
+		log.info("经过反斜线转译,截取后的subJson:{}",subJson);
+		return subJson;		
+	}	
+	
+	//二、仅判断code值
+	public boolean checkCode(String json) {
+		String codeJson = translateBackslash(json);		
+		//用org.json.JSONObject来转json
+		try {
+		    org.json.JSONObject jsonobject = new org.json.JSONObject(codeJson);
+//		    int code = jsonobject.getInt("code");
+		    String code = jsonobject.getString("code");
+		    if ("00".equals(code)) {
+		    	return true;		
+			} else {
+				log.info("解析JSON--校验code:{}", code);
+				return false;
+			}
+	    } catch (JSONException e) {
+		   log.warn("解析JSON--校验code异常,{}", e.getMessage());
+		   throw new BusinessException("解析JSON--校验code异常");
+	  	}				
+	}	
+	
+	//三、org.json.JSONObject--判断code值,并将content转为Java对象(简单的对象，从json的content中取)
+	public User jsonToJava(String json) {
+		User user = new User();
+		if (true == checkCode(json)) {//返回json中有code且code为真时
+			try {
+			   org.json.JSONObject jsonobject = new org.json.JSONObject(json);
+		       org.json.JSONObject jsonobjectContent = jsonobject.getJSONObject("content");
+		       log.info("从JSON中获取的内容jsonobjectContent:{}",jsonobjectContent);
+		       if (null != jsonobjectContent.get("userName") && !"".equals(jsonobjectContent.get("userName"))) {
+		    	   user.setAcountNo(jsonobjectContent.getString("userName"));
+		       }
+		       if (null != jsonobjectContent.get("userId") && !"".equals(jsonobjectContent.get("userId"))) {
+		    	   user.setUserId(jsonobjectContent.getString("userId"));
+		       }
+		    } catch (JSONException e) {
+			   log.warn("解析JSON内容jsonobjectContent异常,{}", e.getMessage());
+			   throw new BusinessException("解析JSON内容jsonobjectContent异常");
+		  	}
+			if (null == user.getAcountNo() || null == user.getUserId() || "".equals(user.getAcountNo()) || "".equals(user.getUserId())) {
+	        	log.info("从json内容中获取用户2个参数为空:,acountNo>>>{},userId>>>{}",user.getAcountNo(),user.getUserId());
+	        	throw new BusinessException("从json内容中获取用户2个参数为空");
+			}
+		}
+		log.info("ProductService--GetUserInfoByUserId()--封装到user的信息:{}",user);
+    	return user;
+	}
+	
+	//四、json转为List--om.alibaba.fastjson.JSON.parseArray()
+	public List<Order> jsonToList(String json) {
+		String orderJsonSub = translateBackslash(json);
+		//json转为List核心代码行
+		List<Order> orderList = (List<Order>)com.alibaba.fastjson.JSON.parseArray(orderJsonSub,Order.class);
+		List<Order> myBuyList = new ArrayList<Order>();
+		if (null != orderList && orderList.size()>0) {
+			log.info("解析json转为list后的条数:{}",orderList.size());
+			Order order = new Order();
+			for (int i = 0; i < orderList.size(); i++) {
+				order = orderList.get(i);
+				//获取商品id、购买时间、组件库/代码库列表id
+				String productIdByOrder = order.getProductId();
+				log.info("jsonToList----productIdByOrder:{},order.getCreatedDate():{}",productIdByOrder,order.getCreatedDate());
+				if (null == productIdByOrder || null == order.getCreatedDate()|| null == order.getPrice()) {
+					throw new BusinessException("ProductService--findBuyProductInfoPageList--调新交易-订单接口,获取到的商品ID,购买时间,价格有空值");
+				}    			
+				if (order.getPrice().toString().contains("-")) {//-125:支出金额125元
+					order.setBuyDate(order.getCreatedDate());
+					myBuyList.add(order);
+				}
+			}    		
+			log.info("封装到新list中的条数:{}",myBuyList.size());
+		}
+		return myBuyList;
+	}
+	
+	//五、json转为复杂的Java对象--com.alibaba.fastjson.JSONObject.parseObject
+	public ResumeProduct jsonToJavaObject(String json) {
+		ResumeProduct resumeProduct = new ResumeProduct();
+		String resumeJsonSub = translateBackslash(json);
+		com.alibaba.fastjson.JSONObject jsonObject= com.alibaba.fastjson.JSONObject.parseObject(resumeJsonSub);
+		if ("00".equals(jsonObject.get("code"))) {
+			if (null != jsonObject.get("data") || !"".equals(jsonObject.get("data"))) {
+				//核心代码行，转化为复杂对象
+				resumeProduct = com.alibaba.fastjson.JSON.parseObject(com.alibaba.fastjson.JSON.toJSONString(jsonObject.get("data")), new TypeReference<ResumeProduct>(){});
+			}
+			log.info("code=00,key=data,解析过JSON后---resumeProduct:{}",resumeProduct);
+		} else {
+			throw new NotFoundException("返回值异常:code不为00");
+		}
+		return resumeProduct;
+	}
+}
+
+
+@Data
+public class User {
+
+	private String userId;
+	private String name;//用户名称
+	private String acountNo;//账户号
+	private String email;
+	private String tokenStr;
+}
+
+@Data
+public class Order implements Serializable {
+	private String productId; 
+	private String productName; 
+	private String userId;
+	private BigDecimal price;
+	private LocalDateTime createdDate;
+	private LocalDateTime buyDate;
+}
+
+@Data
+public class ResumeProduct implements Serializable{
+
+	@NotBlank
+    private String productName;
+	@DecimalMin(value = "0", inclusive = true, message = "不能小于{value}")
+    private BigDecimal price;
+	@Enumerated(EnumType.STRING)
+    private SettlementType settlementType = SettlementType.OFFLINE;
+	private String label;
+	
+	private String issuer;
+	private String relativeId;
+	private String backgrInfo;	
+	private String source;//默认传：TTFWL
+	private String filePath;//多文件之间用“|”拼接
+	private String certInfo;//4
+	private String hobbyInfo;//8
+	
+	private BasicData basicData;
+	
+	private JobObjectiveData jobObjectiveData;//求职意向
+
+	private List<Education> educationList;//教育经历
+	
+	private List<Job> jobList;//工作经验
+	
+	private List<Project> projectList;//项目经验
+	
+	private List<Skill> skillList;//培训经历
+	
+	private List<Train> trainList;//技能语言
+	
+	private MultipartFile[] multipartFiles;
+
+	public enum SettlementType {
+    	OFFLINE, ONLINE, INTEGRAL
+    }
+}
