@@ -1,0 +1,100 @@
+package com.servicechain.shareservice.util;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import lombok.Data;
+
+/**
+ * list集合排序工具类，取某个字段的最值
+ * @author Administrator
+ *
+ */
+public class SortListUtil {
+	
+	//主方法test
+	public static void main(String[] args) {
+		//测试list
+		List<Education> testlist = new ArrayList<Education>();
+		Education education = new Education();
+		//第一条测试数据
+		education.setStartDate("201409");
+		education.setEndDate("201806");
+		education.setUniversity("巢湖学院");
+		testlist.add(education);
+		//第二条测试数据
+		education = new Education();
+        education.setStartDate("201109");
+		education.setEndDate("201406");
+		education.setUniversity("砀山中学");
+		testlist.add(education);
+		//第三条测试数据
+		education = new Education();
+        education.setStartDate("201809");
+		education.setEndDate("202106");
+		education.setUniversity("上海大学");
+		testlist.add(education);		
+		System.out.println("list.size():"+testlist.size());
+		for (int i = 0; i < testlist.size(); i++) {
+			Education EducationResult = new Education();
+			EducationResult = testlist.get(i);
+			System.out.println("EducationResult:"+EducationResult);
+		}
+		
+		List<Education> educationList = testlist;
+        if(educationList!= null &&  educationList.size() > 0){
+            if(educationList.size() ==1) {
+            	String university = educationList.get(0).getUniversity();
+            	System.out.println("最高学历--毕业大学:"+university);
+            }else{
+                educationListSort(educationList);
+                String university = educationList.get(0).getUniversity();
+            	System.out.println("排序后--最高学历--毕业大学:"+university);
+            }
+        }
+	}
+	
+	/**
+     * 对教育经历进行比较排序:取最高学历、毕业大学
+     * 冒泡排序
+     *
+     * @param educationAllList
+     */
+    public static void educationListSort(List<Education> educationAllList) {
+        Collections.sort(educationAllList, new Comparator<Education>() {
+            @Override
+            public int compare(Education o1, Education o2) {
+                try {
+                	String str1 = o1.getStartDate();
+                	String str2 = o2.getStartDate();
+                	if (str1.compareTo(str2)<0) {						
+                        return 1;
+                    } else if (str1.compareTo(str2)>0) {
+                        return -1;
+                    } else {
+                        return 0;
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                return 0;
+            }
+        });
+    }
+    
+}
+
+@Data
+public class Education implements Serializable {
+
+	private String startDate; 
+	private String endDate;
+	private String university;
+	private String specialty;
+	private String educationBackgr;//枚举
+	private String eduBackgrName;//等级名
+	private String eduBackgrLevel;//等级id
+
+}
