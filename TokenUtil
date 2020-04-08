@@ -1,0 +1,68 @@
+package com.servicechain.shareservice.util;
+
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import com.servicechain.shareservice.exceptions.BusinessException;
+import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
+//jwt解析token,获取登录人的用户信息
+@Slf4j
+public class TokenUtil {
+
+	//从token中获取登录人的用户信息
+    public User GetUserInfoByLogin() {
+    	User user = new User();
+		//jwt 解析内容如下:
+    	/*{
+    		"sub": "admin@newtouch.com",
+    		"user_id": "297eaf7d508ebfe001508ebff0aa0001",
+    		"scope": [
+    			"Any"
+    		],
+    		"display_name": "系统管理员",
+    		"exp": 1583479342,
+    		"authorities": [
+    			"ROLE_ADMIN"
+    		],
+    		"jti": "6f018317-70f1-4610-b6c3-dc7c5164b2a1",
+    		"client_id": "servicechain"
+    	}*/
+    	//获取登录用户token
+    	Jwt token = (Jwt) SecurityContextHolder.getContext().getAuthentication().getCredentials();
+        log.info("获取登录用户token:{}",token);
+        if (null == token) {
+        	log.warn("TokenUtil--GetUserInfoByLogin--获取登录用户token为空");
+        	throw new BusinessException("TokenUtil--GetUserInfoByLogin--获取登录用户token为空");
+		}
+        String tokenStr = "Bearer "+token.getTokenValue();
+        String userId = token.getClaimAsString("user_id");
+        String acountNo = token.getClaimAsString("sub");
+        String name = token.getClaimAsString("display_name");
+        if (null == tokenStr || null == acountNo || null == userId || null == name) {
+        	log.info("TokenUtil--GetUserInfoByLogin--获取登录用户token的参数:tokenStr>>>{},acountNo>>>{},userId>>>{},userName>>>{}",tokenStr,acountNo,userId,name);
+        	throw new BusinessException("TokenUtil--GetUserInfoByLogin--获取登录用户token的参数为空");
+		}
+        user.setTokenStr(tokenStr);
+        user.setAcountNo(acountNo);
+    	user.setUserId(userId);
+		user.setName(name);
+		//测试
+//        String tokenStr="Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzZXJ2aWNlY2hhaW5AbmV3dG91Y2guY29tIiwidXNlcl9pZCI6IjhlZTM2MWRjLTNjZjQtMTFlYS1iYmRlLWFjZGU0ODAwMTEyMiIsInNjb3BlIjpbIkFueSJdLCJkaXNwbGF5X25hbWUiOiLns7vnu5_nrqHnkIblkZgiLCJleHAiOjE1ODUwNDkxNTgsImF1dGhvcml0aWVzIjpbIlJPTEVfQURNSU4iXSwianRpIjoiNWYzMzFjY2ItYzAxNi00Mzg1LTlmYjctNjY0Mjc5NWQzNmM5IiwiY2xpZW50X2lkIjoic2VydmljZWNoYWluIn0.U1WmUZDLXfPZe753XB_iAFecmZf5-M3wj7-naEZv-hhvbT1l41Zp8OPu4_QCUoRwJyJF7vjdoPhtWLm3Otsk7QRQUFrpw0r1leXODfq5NZIMvdL4_tqY0bqvYGBr3kNSq0V28_MALIf9Ls368gC0T_ZRYy7BAlLzJOY57_F8KDdESN6Qf69DzCU4lrrt8uHDS1KQFbrd7Fd_JeKFBDH3Isld9nt2_zZ_d49wwInC1QVSxDN-qhITCssWnefkNtFplob8AzZb6tr65U6tn91PWGAzz6xtiBlEV-8zl3FMjO5LfRkpTCdLxO44njgXmszN4eTebgAs1_KjETjJjF5AQg";
+//        user.setTokenStr(tokenStr);
+//    	user.setAcountNo("san.zhang@newtouch.com");
+//    	user.setUserId("f8a83956-7d56-4544-a787-11427f40faf5");
+//		user.setName("管理员-测试");
+		log.info("TokenUtil--GetUserInfoByLogin()--封装到user的信息:{}",user);
+    	return user;
+	}
+}
+
+@Data
+public class User {
+	private String userId;
+	private String name;//用户名称
+	private String acountNo;//账户号
+	private String email;
+	private String tokenStr;
+}
+
