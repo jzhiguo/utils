@@ -18,7 +18,7 @@ import org.springframework.util.Base64Utils;
  */
 public class AesUtils {
 
-//	public static String AES_KEY = "pjbbAvaE8faDOjYvqMPIMQ==";//AES_KEY一般是约定的
+//	public static String AES_KEY = "pjbbAvaE8faDOjYvqMPIMQ=="; //AES_KEY一般是约定的
 	public static void main(String[] args) throws Exception {
 		//生成AES_KEY
 		System.out.println("随机生成AES_KEY:"+generateKey());
