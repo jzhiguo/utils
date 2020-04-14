@@ -161,6 +161,44 @@ public class FileUtil {
 		}
 		return fileInfoList;		
 	 }
+	 
+	/**
+	 * 上传附件--补充亮点:文件路径的拼接、创建;加上文件名称;保存文件;获取文件大小
+	 * @param multipartFile
+	 * @param relativeId
+	 */
+	@Test
+	public void uploadBackFileTest(MultipartFile multipartFile,String relativeId){
+        try(InputStream in = multipartFile.getInputStream()){
+            String origFileName = multipartFile.getOriginalFilename();
+            String origResumePath = "E:/file";
+            Date date = new Date();
+    		SimpleDateFormat sdfDate = new SimpleDateFormat("yyyyMMdd");
+    		SimpleDateFormat sdfTime = new SimpleDateFormat("yyyyMMddHHmmssSSS");//毫秒17位
+    		String curDatePath = sdfDate.format(date);
+    		String curTimeName = sdfTime.format(date);
+            System.out.println("curDatePath:"+curDatePath);
+            System.out.println("curTimeName:"+curTimeName);
+            // 完整路径 = 原始简历路径根路径 + 当前年月
+            Path fullPath = Paths.get(origResumePath.concat(curDatePath).concat(File.separator));
+            System.out.println("fullPath:"+fullPath);
+            // 如果当前年月目录不存在，则创建
+            if (Files.notExists(fullPath)) {
+                Files.createDirectories(fullPath);
+            }
+            StringBuilder saveFilePath = new StringBuilder(fullPath.toString())
+                    .append(File.separator)
+                    .append(curTimeName)
+                    .append("_")
+                    .append(origFileName);
+            System.out.println("saveFilePath:"+saveFilePath);
+            // 保存文件
+            long fileSize = Files.copy(in, Paths.get(saveFilePath.toString()));
+            System.out.println("fileSize:"+fileSize);
+//            log.info("上传的原始简历保存成功，大小为：{}", fileSize);
+        }catch (Exception e){
+        }
+	}
 	
 	/**
 	 * 单个附件下载
