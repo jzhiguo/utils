@@ -1,0 +1,143 @@
+//基于SpringBoot的发送邮件(简单邮件、带附件的、带静态图片的三种)
+
+1.引入依赖包
+<!--发送邮件-->
+<dependency>
+   <groupId>org.springframework.boot</groupId>
+   <artifactId>spring-boot-starter-mail</artifactId>
+</dependency>
+<dependency>
+   <groupId>org.springframework.boot</groupId>
+   <artifactId>spring-boot-starter-thymeleaf</artifactId>
+</dependency>
+
+2.配置文件如下：
+spring.mail.host=smtp.qq.com
+spring.mail.username=1977624135@qq.com
+spring.mail.password=ibcsxuinseuichcb//并非密码,而是第三方登陆邮件所需要的授权码.
+spring.mail.default-encoding=UTF-8
+spring.application.name=spirng-boot-mail
+
+3.工具类如下：
+package com.servicechain.shareservice.util;
+
+import java.io.File;
+import javax.mail.internet.MimeMessage;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.stereotype.Component;
+import com.servicechain.shareservice.exceptions.BusinessException;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+@Component
+public class EmailUtil {
+
+	@Autowired
+	private JavaMailSender javaMailSender;
+	
+	@Value("${spring.mail.username}")
+    private String from;
+	
+	//1简单邮件
+	public void sendSimpleMail(String to, String text, String subject){
+		log.info("EmailUtil--sendSimpleMail入参from:{},to:{},text:{},subject:{}",from, to, text, subject);
+		SimpleMailMessage simpleMailMessage = new SimpleMailMessage();
+		simpleMailMessage.setFrom(from);
+		simpleMailMessage.setTo(to);
+		simpleMailMessage.setText(text);
+		simpleMailMessage.setSubject(subject);
+		
+		try {
+			javaMailSender.send(simpleMailMessage);
+			log.info("EmailUtil--sendSimpleMail--简单邮件已发送！！！");
+		} catch (Exception e) {
+			log.warn("EmailUtil--sendSimpleMail--简单邮件发送异常:{}",e.getMessage());
+			throw new BusinessException("EmailUtil--sendSimpleMail--简单邮件发送异常",e);
+		}
+	}
+	
+	//2带附件邮件
+	public void sendAttachmentsMail(String to, String subject, String content, String filePath) {
+		log.info("EmailUtil--sendAttachmentsMail入参from:{},to:{},subject:{},content:{},filePath:{}",from, to, subject, content, filePath);
+		MimeMessage message = javaMailSender.createMimeMessage();
+		try {
+			MimeMessageHelper helper = new MimeMessageHelper(message, true);//true表示需要创建一个multipart message
+			helper.setFrom(from);
+			helper.setTo(to);
+			helper.setSubject(subject);
+			helper.setText(content);
+			helper.setCc("1977624135@qq.com");//抄送
+			//添加附件
+			FileSystemResource file = new FileSystemResource(new File(filePath));
+			String fileName = file.getFilename();
+			helper.addAttachment(fileName, file);
+			javaMailSender.send(message);
+			log.info("EmailUtil--sendAttachmentsMail--带附件邮件已经发送！！！");
+		} catch (Exception e) {
+			log.info("EmailUtil--sendAttachmentsMail--带附件邮件已经发送--异常:{}",e.getMessage());
+			throw new BusinessException("EmailUtil--sendAttachmentsMail--带附件邮件已经发送--异常",e);
+		}
+	}
+	
+	/3带静态资源文件（图片）的邮件
+	public void sendInlineResourceMail(String to, String subject, String content, String rscPath, String rscId) {
+		log.info("EmailUtil--sendInlineResourceMail入参from:{},to:{},subject:{},content:{},rscPath:{},rscId:{}",from, to, subject, content, rscPath, rscId);
+		MimeMessage message = javaMailSender.createMimeMessage();
+		try {
+			MimeMessageHelper helper = new MimeMessageHelper(message, true);//true表示需要创建一个multipart message
+			helper.setFrom(from);
+			helper.setTo(to);
+			helper.setSubject(subject);
+			helper.setText(content);
+			helper.setCc("1977624135@qq.com");//抄送
+			//添加附件
+			FileSystemResource file = new FileSystemResource(new File(rscPath));
+			helper.addInline(rscId, file);
+			javaMailSender.send(message);
+			log.info("EmailUtil--sendInlineResourceMail--带静态资源文件邮件已经发送！！！");
+		} catch (Exception e) {
+			log.info("EmailUtil--sendInlineResourceMail--带静态资源文件邮件已经发送--异常:{}",e.getMessage());
+			throw new BusinessException("EmailUtil--sendInlineResourceMail--带静态资源文件邮件已经发送--异常",e);
+		}
+	}	
+	
+}
+
+4.单元测试如下：
+@Test
+	public void sendSimpleMail() {
+		String to = "1977624135@qq.com";//发送QQ邮件---SMTP 协议：发送邮件协议；
+		String text = "共享邮件Test内容";
+		String subject = "共享邮件Test主题";
+		emailUtil.sendSimpleMail(to, text, subject);
+	}
+	
+	@Test
+	public void sendAttachmentsMail() {
+		String to = "1977624135@qq.com";
+		String subject = "共享邮件--含附件--Test主题";
+		String content = "共享邮件--含附件--Test内容";
+		String fileDir ="E:\\file";
+		String fileName ="表.txt";
+		String filePath = fileDir + "\\" + fileName;
+		emailUtil.sendAttachmentsMail(to, subject, content, filePath);
+	}
+	
+	@Test
+	public void sendInlineResourceMail() {
+//		String rscId = UUID.randomUUID().toString().replace("-", "");
+		String rscId = "";
+		String to = "1977624135@qq.com";
+		String subject = "共享邮件--含静态文件图片--Test主题";
+		String content = "<html><body>这是有图片的邮件:<img src=\'cid:"+rscId+"\'></body></html>";
+		String fileDir ="E:\\file";
+		String imageName ="新致.jpg";
+		String rscPath = fileDir + "\\" + imageName;
+		emailUtil.sendInlineResourceMail(to, subject, content, rscPath, rscId);
+	}
+
