@@ -84,7 +84,7 @@ public class EmailUtil {
 		}
 	}
 	
-	/3带静态资源文件（图片）的邮件
+	//3带静态资源文件（图片）的邮件
 	public void sendInlineResourceMail(String to, String subject, String content, String rscPath, String rscId) {
 		log.info("EmailUtil--sendInlineResourceMail入参from:{},to:{},subject:{},content:{},rscPath:{},rscId:{}",from, to, subject, content, rscPath, rscId);
 		MimeMessage message = javaMailSender.createMimeMessage();
@@ -105,6 +105,31 @@ public class EmailUtil {
 			throw new BusinessException("EmailUtil--sendInlineResourceMail--带静态资源文件邮件已经发送--异常",e);
 		}
 	}	
+	//4.html格式的邮件，含跳转链接
+	@Async
+    	public void sendActiveMail(String mailAddress, String userId, String activeCode){
+		String completeUrl =  this.activeUrl + "?id=" + userId + "&code=" + activeCode;
+		MimeMessage message = mailSender.createMimeMessage();
+		try {
+		    MimeMessageHelper helper = new MimeMessageHelper(message,true);
+
+		    helper.setTo(mailAddress);
+		    helper.setFrom("servicechain@sina.com");
+		    helper.setSubject("请激活您的天天服务链账号");
+		    String mailContent = "<h1>天天服务链</h1>" +
+			    "<p>你好，</p>" +
+			    "<p>感谢您注册天天服务链，请点击以下链接激活账号:</p>" +
+			    "<p>" + "<a href='" + completeUrl + "'>" + completeUrl  + "</a></p>" +
+			    "<p>如果以上链接无法点击，请将上面的地址复制到你的浏览器地址栏。</p>" +
+			    "<p><strong>天天服务链运营团队</strong></p>";
+		    helper.setText(mailContent, true);
+		    mailSender.send(message);
+		    log.info("发送激活邮件-{}", userId);
+		} catch (MessagingException e) {
+		    log.warn("发送激活邮件失败-{}", userId);
+		    throw new RuntimeException(e.getMessage());
+		}
+    }
 	
 }
 
