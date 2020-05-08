@@ -17,6 +17,7 @@ import org.springframework.util.Base64Utils;
  * 2.生成密钥对(公钥、私钥)
  * 3.SHA-256加密
  * @author Administrator
+ * org.springframework.security.crypto.factory.PasswordEncoderFactories包含了加密的各种架包，可直接使用
  *
  */
 @Component
@@ -147,4 +148,29 @@ public class RsaUtils {
 		return stringBuffer.toString();
 	}
 
+}
+
+//可直接使用的多种加密
+public class PasswordEncoderFactories {
+
+	@SuppressWarnings("deprecation")
+	public static PasswordEncoder createDelegatingPasswordEncoder() {
+		String encodingId = "bcrypt";
+		Map<String, PasswordEncoder> encoders = new HashMap<>();
+		encoders.put(encodingId, new BCryptPasswordEncoder());
+		encoders.put("ldap", new org.springframework.security.crypto.password.LdapShaPasswordEncoder());
+		encoders.put("MD4", new org.springframework.security.crypto.password.Md4PasswordEncoder());
+		encoders.put("MD5", new org.springframework.security.crypto.password.MessageDigestPasswordEncoder("MD5"));
+		encoders.put("noop", org.springframework.security.crypto.password.NoOpPasswordEncoder.getInstance());
+		encoders.put("pbkdf2", new Pbkdf2PasswordEncoder());
+		encoders.put("scrypt", new SCryptPasswordEncoder());
+		encoders.put("SHA-1", new org.springframework.security.crypto.password.MessageDigestPasswordEncoder("SHA-1"));
+		encoders.put("SHA-256", new org.springframework.security.crypto.password.MessageDigestPasswordEncoder("SHA-256"));
+		encoders.put("sha256", new org.springframework.security.crypto.password.StandardPasswordEncoder());
+		encoders.put("argon2", new Argon2PasswordEncoder());
+
+		return new DelegatingPasswordEncoder(encodingId, encoders);
+	}
+
+	private PasswordEncoderFactories() {}
 }
