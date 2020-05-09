@@ -1,0 +1,211 @@
+package com.servicechain.shareservice.util;
+
+import java.io.IOException;
+import java.security.SecureRandom;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import org.apache.commons.httpclient.Header;
+import org.apache.commons.httpclient.HttpClient;
+import org.apache.commons.httpclient.HttpException;
+import org.apache.commons.httpclient.NameValuePair;
+import org.apache.commons.httpclient.methods.PostMethod;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
+import com.servicechain.shareservice.exceptions.BusinessException;
+import cn.hutool.captcha.CaptchaUtil;
+import cn.hutool.captcha.LineCaptcha;
+import lombok.extern.slf4j.Slf4j;
+import net.minidev.json.JSONObject;
+
+@Slf4j
+@Component
+public class SMSUtil {
+	
+//	@Value("${spring.sms.username}")//本站用户名
+//    private String userName;
+	
+//	@Value("${spring.sms.securityKey}")//接口安全秘钥
+//    private String securityKey;
+
+	//一、生成图形验证码--两个出参：验证码有效期、图片
+	cn.hutool.captcha.CaptchaUtil;
+	cn.hutool.captcha.LineCaptcha;
+	private LineCaptcha lineCaptcha = CaptchaUtil.createLineCaptcha(90, 45,4,20);
+	public Map<String, Object> createCaptcha(){
+        //生成验证码
+        lineCaptcha.createCode();
+        String imageBase64 = lineCaptcha.getImageBase64();
+        //生成一个token
+        String token = UUID.randomUUID().toString().replaceAll("-","");
+        ConcurrentHashMapCacheUtil.setCache(token,lineCaptcha.getCode(),10*60 * 1000L);
+        log.info("缓存验证码token:"+token+" code:"+lineCaptcha.getCode());
+        Map<String, Object> map = new HashMap<>(2);
+        map.put("captchaToken", token);
+        map.put("img", imageBase64);
+//        map.put("code", lineCaptcha.getCode());
+        return map;
+    }
+	
+	//二、创建发送短信验证码
+	public Map<String, Object> createSMS(String phone) throws HttpException, IOException {
+		//第一步：判断用户当日短信发送数量是否已达上限?
+		//第二步：图形验证码验证
+		if (false==verify("","")) {
+			throw new BusinessException("图形验证码验证失败");
+		}
+		//第三步：生成随机数字，发送短信[方式一:HttpClient请求;方式二：RestTemplate]		
+		String userName = "心心相印2020";
+		String securityKey = "d41d8cd98f00b204e980"; 
+		String vCode = String.format("%04d", new SecureRandom().nextInt(10000));//"验证码：8888"
+		System.out.println("phone："+phone);
+		System.out.println("vCode："+vCode);
+		//方式一:HttpClient请求
+		HttpClient client = new HttpClient();
+		PostMethod post = new PostMethod("http://gbk.api.smschinese.cn");
+		post.addRequestHeader("Content-Type","application/x-www-form-urlencoded;charset=gbk");//在头文件中设置转码
+		NameValuePair[] data = { 
+			new NameValuePair("Uid", userName),
+			new NameValuePair("Key", securityKey),
+			new NameValuePair("smsMob",phone),
+			new NameValuePair("smsText",vCode)
+		};
+		
+		post.setRequestBody(data);	
+		client.executeMethod(post);
+		
+		Header[] headers = post.getResponseHeaders();
+		int statusCode = post.getStatusCode();
+		
+		System.out.println("statusCode:"+statusCode);
+		for(Header h : headers){
+			System.out.println(h.toString());
+		}
+		String result = new String(post.getResponseBodyAsString().getBytes("gbk"));
+		System.out.println(result); //打印返回消息状态
+	
+		post.releaseConnection();
+		
+		//方式二：RestTemplate
+		singleSend(phone, vCode);
+		
+		//第四步：同一用户的请求短信的次数，记录入库
+		//第五步：手机短信有效期缓存
+		String token = UUID.randomUUID().toString().replaceAll("-", "");
+		int phoneSmsEffect = 5;//手机短信有效时间:5分钟
+		ConcurrentHashMapCacheUtil.setCache(token, vCode, phoneSmsEffect * 60 * 1000L);
+		log.info("缓存验证码token:" + token + ";code:" + vCode);
+		Map<String, Object> map = new HashMap<>(2);
+		map.put("smsToken", token);
+		return map;
+	}
+
+	//三、提交;校验短信
+	public boolean verifySms(String mobile, String captchaToken, String paramCode, String username) {
+		if (null==mobile || 11!=mobile.trim().length()) {
+			throw new BusinessException("手机号位数错误");
+		}
+		if (StringUtils.isEmpty(captchaToken)) {
+			throw new BusinessException("短信验证码错误");
+		}
+		if (StringUtils.isEmpty(paramCode)) {
+			throw new BusinessException("验证码不能为空");
+		}
+		if (StringUtils.isEmpty(username)) {
+			throw new BusinessException("账户名不能为空");
+		}
+
+		Object cache = ConcurrentHashMapCacheUtil.getCache(captchaToken);
+		if (cache == null) {
+			throw new BusinessException("验证码不存在或已过期！");
+		}
+		String code = String.valueOf(cache);
+		if (null == paramCode || 0==paramCode.trim().length()) {
+			throw new BusinessException("验证码不能为空！");
+		}
+		if (code.toUpperCase().equals(paramCode.toUpperCase())) {
+
+			ConcurrentHashMapCacheUtil.deleteCache(captchaToken);
+			return true;
+		} else {
+			return false;
+		}
+	}
+	
+	//验证码校验
+    public boolean verify(String token, String paramCode) {
+        Object cache = ConcurrentHashMapCacheUtil.getCache(token);
+        if (cache==null){
+        	log.info("验证码不存在或已过期");
+        	return false;
+//            throw new BusinessException("验证码不存在或已过期");
+        }
+        String code=String.valueOf(cache);
+        if (null == paramCode && paramCode.trim().length()==0){
+        	log.info("验证码不能为空");
+        	return false;
+//            throw new BusinessException("验证码不能为空！");
+        }
+        if (code.toUpperCase().equals(paramCode.toUpperCase())){
+            ConcurrentHashMapCacheUtil.deleteCache(token);
+            log.info("验证通过！！！");
+        	return true;
+        }else {
+        	log.info("验证码错误");
+        	return false;
+//            throw new BusinessException("验证码错误");
+        }
+    }
+    
+    /**
+	* 单条短信发送,智能匹配短信模板
+	*
+	* @param apikey成功注册后登录云片官网,进入后台可查看
+	* @param text需要使用已审核通过的模板或者默认模板
+	* @param mobile接收的手机号,仅支持单号码发送
+	* @return json格式字符串
+	*/
+	public String singleSend(String mobile,String verifyCode) {
+		String userName = "心心相印2020";
+		String securityKey = "d41d8cd98f00b204e980"; 
+		String tpl_value="#smsCode#="+verifyCode;
+		String smshttp = "http://gbk.api.smschinese.cn";
+		
+		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+		params.add("apikey", securityKey);
+        params.add("mobile", mobile);
+		params.add("tpl_id", "3672998");      //模板id
+		params.add("tpl_value",tpl_value);
+		//模板变量值
+	    params.add("mobile", mobile);  
+	    
+	    return sendPostRepository(smshttp, params);
+	}
+	
+	public String sendPostRepository(String url, MultiValueMap<String, String> params){
+        RestTemplate client = new RestTemplate();
+        //新建Http头，add方法可以添加参数
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("Accept", "*/*");
+//        headers.add("Content-Type", "application/json");
+        //设置请求发送方式
+        HttpMethod method = HttpMethod.POST;
+        // 以表单的方式提交
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        //将请求头部和参数合成一个请求
+        HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(params, headers);
+        //执行HTTP请求，将返回的结构使用String 类格式化（可设置为对应返回值格式的类）
+        ResponseEntity<String> response = client.exchange(url, method, requestEntity,String.class);
+
+        return response.getBody();
+    }
+}
