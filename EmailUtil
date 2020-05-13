@@ -130,6 +130,121 @@ public class EmailUtil {
 		    throw new RuntimeException(e.getMessage());
 		}
     }
+    
+    //5自定义格式的邮件
+	@Async
+	public void sendHtmlMail(String mailAddress, String displayName, Product product) {
+		try {
+			if (null == mailAddress) {
+				throw new BusinessException("接收者的邮箱为空");
+			}
+			if (null != displayName && displayName.trim().length()>0) {
+				displayName = displayName + "，您好！";
+			} else {
+				displayName = "";
+			}			
+			String productType = product.getProductType().toString();
+			String productTypeStr = "";
+			String productName = product.getProductName();
+			String auditStatus = product.getAuditStatus().toString();
+			String auditStatusStr = "";
+			if ("CODE".equals(productType)) {
+			     productTypeStr = "代码";	
+			} else if ("COMPONENT".equals(productType)) {
+				 productTypeStr = "组件";
+			} else if ("RESUME".equals(productType)) {
+				 productTypeStr = "简历";
+			} else {
+				 throw new BusinessException("商品类型有误");
+			}				
+			if ("SUCCESS".equals(auditStatus)) {
+				auditStatusStr = "审核通过!"; 
+			} else if ("FAIL".equals(auditStatus)) {
+				String auditReason = product.getProductDetail().getAuditReason();
+				if (null != auditReason && auditReason.trim().length()>0) {
+					auditStatusStr = "审核未通过"+":"+auditReason+"。"; 					
+				} else {
+					auditStatusStr = "审核未通过。"; 
+				}
+			} else {
+				 throw new BusinessException("审核结果有误");
+			}		
+			
+			MimeMessage message = javaMailSender.createMimeMessage();
+    		MimeMessageHelper helper = new MimeMessageHelper(message,true);
+		    helper.setTo(mailAddress);
+		    helper.setFrom(from,"天天服务链");
+		    helper.setSubject("请查看您的审核结果");
+		    String mailContent =
+                    "<table style=\"font-family: microsoft yahei;background: #f6f6f6;width: 100%;line-height: initial;margin: 0 auto;padding: 10px 0;white-space: normal;word-break: break-all;word-wrap: break-word;\">\n" +
+                    "<tbody>\n" +
+                            "            <tr>\n" +
+                            "                <td>\n" +
+                            "                    <table style=\"max-width: 620px;display: block;margin: 0 auto;padding: 0 2.5%;\">\n" +
+                            "                        <tbody style=\"display: block;\">\n" +
+                            "                            <!-- 邮件内容 -->\n" +
+                            "                            <!-- padding: 30px 55px; -->\n" +
+                            "                            <tr class=\"email_body\" style=\"display: block;background: #fff;padding: 5% 8.87%;min-height: 350px;box-shadow: 4px 4px 1px #E2E2E2;\">\n" +
+                            "                                <td style=\"display: block;\">\n" +
+                            "                                    <table style=\"display: block;\">\n" +
+                            "                                        <tbody style=\"display: block;\">\n" +
+                            "                                            <tr>\n" +
+                            "                                                <td style=\"font-family: microsoft yahei;display: block;font-size: 22px;color: #0072BC;margin-bottom: 32px;\">审核结果通知</td>\n" +
+                            "                                            </tr>\n" +
+                            "                                            <tr>\n" +
+                            "                                                <td style=\"font-family: microsoft yahei;display: block;font-size: 16px;color: #000000;margin-bottom: 10px;\">"+displayName+"</td>\n" +
+                            "                                            </tr>\n" +
+                            "                                            <tr>\n" +
+                            "                                                <td style=\"font-family: microsoft yahei;display: block;font-size: 14px;color: #666666;margin-bottom: 10px;\"><p style='font-size:18px;'>您在天天服务链发布的共享"+ productTypeStr + "："+ productName +"<font style='font-size:16px;color:#55aeff;font-style:italic;'>"+auditStatusStr+"</font></p></td>\n" +
+                            "                                            </tr>\n" +
+                            "                                                <td style=\"font-family: microsoft yahei;display: block;font-size: 14px;color: #666666;margin-bottom: 10px;height:200px\"></td>\n" +
+                            "                                            </tr>"+commonStyle();
+		    helper.setText(mailContent, true);
+		    javaMailSender.send(message);
+		    log.info("审核结果--发送邮件通知--成功");
+		} catch (Exception e) {
+		    log.warn("审核结果--发送邮件通知--失败");
+		    throw new RuntimeException(e.getMessage());
+		}
+    }
+	
+    //通用样式
+    public String commonStyle(){
+        return "                                            <tr style=\"display: block;\">\n" +
+                "                                                <td style=\"font-family: microsoft yahei;display: block;text-align: right;font-size: 14px;\">天天服务链团队</td>\n" +
+                "                                            </tr>\n" +
+                "                                            <tr style=\"display: block;\">\n" +
+                "                                                <td style=\"font-family: microsoft yahei;display: block;text-align: right;font-size: 12px;line-height: 20px;margin-top: 5px;color: #ccc;\">"+ LocalDate.now() +"</td>\n" +
+                "                                            </tr>\n" +
+                "                                        </tbody>\n" +
+                "                                    </table>\n" +
+                "                                </td>\n" +
+                "                            </tr>\n" +
+                "                            <!-- 底部联系方式 -->\n" +
+                "                            <tr style=\"display: block;\">\n" +
+                "                                <td style=\"display: block;\">\n" +
+                "                                    <table style=\"color: #999999;display: block;margin-top: 14px;text-align: center;\">\n" +
+                "                                        <tbody style=\"display: block;\">\n" +
+                "                                            <tr style=\"display: block;\">\n" +
+                "                                                <td style=\"font-family: microsoft yahei;display: block;font-size: 12px;\">如遇到问题，请及时联系我们。</td>\n" +
+                "                                            </tr>\n" +
+                "                                            <tr style=\"display: block;\">\n" +
+                "                                                <td style=\"font-family: microsoft yahei;display: block;font-size: 12px;\">联系电话：021-51105660-6001</td>\n" +
+                "                                            </tr>\n" +
+                "                                            <tr style=\"display: block;\">\n" +
+                "                                                <td style=\"font-family: microsoft yahei;display: block;font-size: 12px;\">联系邮箱：servicechain@newtouch.com</td>\n" +
+                "                                            </tr>\n" +
+                "                                        </tbody>\n" +
+                "                                    </table>\n" +
+                "                                </td>\n" +
+                "                            </tr>\n" +
+                "                        </tbody>\n" +
+                "                    </table>\n" +
+                "                </td>\n" +
+                "            </tr>\n" +
+                "        </tbody>\n" +
+                "    </table>";
+    }
 	
 }
 
