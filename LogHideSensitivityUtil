@@ -1,0 +1,113 @@
+package com.servicechain.shareservice.util;
+
+import org.apache.commons.lang3.StringUtils;
+import com.servicechain.shareservice.entity.User;
+
+//日志--敏感信息：姓名、手机号、邮箱；身份证号；住址；生日；身份证号；银行卡号等--脱敏
+//前后端、数据库对敏感信息，严格需要加密，脱敏仅仅是日志打印
+//工具类中的方法，为全局的static
+public class LogHideSensitivityUtil {
+
+	//常用的：姓名、手机号、邮箱--脱敏
+	public static User hideNameOrPhoneOrEmail(String name, String phone, String email) {
+		User user = new User();
+		String nameStr = "";
+		String phoneStr = ""; 
+		String emailStr = "";
+		
+		//姓名只展示第一个字，其他用星号代替，如 蒋**
+		if (null != name && name.trim().length()>1) {
+			nameStr = StringUtils.rightPad(StringUtils.left(name.trim(), 1), StringUtils.length(name.trim()), "*");
+		}
+		
+		//手机号，隐藏中间4位
+		if (null != phone && phone.trim().length()==11) {
+//			phoneStr = phone.substring(0,3)+"****"+phone.substring(7,11);
+			//手机号码前三后四脱敏
+			phoneStr = phone.replaceAll("(\\d{3})\\d{4}(\\d{4})", "$1****$2");
+		} else if (null != phone){
+			phoneStr = "手机号码不正确，应为11位";
+		}
+		
+		//邮箱前缀仅显示第一个字母，前缀其他隐藏，用星号代替，@及后面的地址显示<例子:g**@163.com>
+		if (null != email && email.trim().length()>3) {
+			final int index = StringUtils.indexOf(email, "@");
+			emailStr = StringUtils.rightPad(StringUtils.left(email, 1), index, "*")
+					.concat(StringUtils.mid(email, index, StringUtils.length(email)));
+		}
+		user.setDisplayName(nameStr);
+		user.setMobile(phoneStr);
+		user.setEmail(emailStr);
+		return user;
+	}
+	
+	//不常用的：地址--脱敏
+	public static String hideAddress(String address){
+		String adressStr = "";
+		//地址只显示第一个字，其他*号隐藏
+		if (null != address && address.trim().length()>1) {
+			adressStr = StringUtils.rightPad(StringUtils.left(address.trim(), 1), StringUtils.length(address.trim()), "*");
+		}
+		return adressStr;
+	}
+	
+	//不常用的：生日脱敏--年份隐藏
+	public static String hideBirthDay(String birthDay){
+		
+		String birthDayStr = "";
+		if (null != birthDay && birthDay.trim().length()>4) {
+			birthDayStr = "****"+birthDay.substring(4);
+		}
+		return birthDayStr;
+	}
+	
+	//不常用的：身份证号码脱敏--保留前六后三
+	public static String hideID(String id){
+		
+		if (null != id && id.trim().length() == 18) {
+			return id.replaceAll("(\\w{6})\\w*(\\w{3})", "$1*********$2");
+		} else {
+			return "身份证号码有误，应为18位";
+		}
+	}
+	
+	//银行卡号脱敏--保留前四后三
+	public static String hideCardNum(String cardNum){
+		
+		if (null != cardNum && cardNum.trim().length() >= 16) {
+			int length = cardNum.trim().length();
+//			return StringUtils.rightPad(StringUtils.left(cardNum.trim(), 4), length-3, "*") + cardNum.substring(length-3);
+			return cardNum.substring(0, 4) + StringUtils.leftPad(StringUtils.right(cardNum, 3), length-4, "*");
+		} else {
+			return "银行卡号码有误，应不低于16位";
+		}
+	}
+}
+
+
+package com.servicechain.shareservice.entity;
+
+import com.servicechain.shareservice.util.LogHideSensitivityUtil;
+import lombok.Data;
+
+@Data
+public class User {
+
+	private String id;
+	private String username;//账户号
+	private String displayName;//用户姓名
+	private String mobile;
+	private String email;
+	private String tokenStr;
+	
+	@Override
+	public String toString() {
+		String displayNameStr = LogHideSensitivityUtil.hideNameOrPhoneOrEmail(displayName, "", "").getDisplayName();
+		String mobileStr = LogHideSensitivityUtil.hideNameOrPhoneOrEmail("", mobile, "").getMobile(); 
+		String emailStr = LogHideSensitivityUtil.hideNameOrPhoneOrEmail("", "", email).getEmail();
+		
+		return "User [id=" + id + ", username=" + username + ", displayName=" + displayNameStr + ", mobile=" + mobileStr
+				+ ", email=" + emailStr + ", tokenStr=" + tokenStr + "]";
+	}
+	
+}
