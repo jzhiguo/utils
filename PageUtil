@@ -74,3 +74,53 @@ public class Order implements Serializable {
 	private BigDecimal price;
 	private LocalDateTime createdDate;
 }
+
+//审核-分页列表查询
+public Page<Product> findAuditProductPageList(Product product, Pageable pageable) {
+
+	log.info("审核-分页列表查询--入参product:{},pageable:{}",product,pageable);
+	Page<Product> pageProduct = null;
+	String userId = "";
+	if (null != product.getIssuer() && product.getIssuer().trim().length()>0) {
+		//调账户项目--根据username获取用户ID
+		userId = GetUserInfoDetails("", product.getIssuer(),"").getId();
+		log.info("调账户项目--根据username获取用户ID:{}",userId);
+		if (null == userId) {
+			log.info("根据输入的username获取不到userId");
+			throw new NotFoundException("查询不到用户ID");
+		}		
+	}
+
+	Page<Product> getProductPageList = null;
+	if (null != userId && userId.trim().length()>0) {
+		getProductPageList = productRepository.findByAuditStatusAndProductTypeAndProductNameContainsAndUserId(product.getAuditStatus(), product.getProductType(), product.getProductName(), userId, pageable);
+
+	} else {
+		getProductPageList = productRepository.findByAuditStatusAndProductTypeAndProductNameContains(product.getAuditStatus(), product.getProductType(), product.getProductName(), pageable);
+	}
+	int total = (int)getProductPageList.getTotalElements();
+	log.info("从数据库查出来getProductPageList总条数:{}",total);
+	log.info("从数据库查出来getProductPageList当前页条数:{}",getProductPageList.getSize());
+
+	List<Product> productList = new ArrayList<Product>();
+	if (null != getProductPageList && getProductPageList.getSize()>0) {
+		List<Product> getProductList = getProductPageList.getContent();
+		if (null != getProductList && getProductList.size()>0) {
+			for (int i = 0; i < getProductList.size(); i++) {
+				Product getProduct = getProductList.get(i);
+				if (null != getProduct.getUserId()) {
+					String userName = GetUserInfoDetails(getProduct.getUserId(), "", "").getUsername();
+					getProduct.setIssuer(null==userName?"":userName);
+					productList.add(getProduct);
+				}
+			}
+		}
+	}	
+	log.info("productList当前页条数:{}",productList.size());
+	// 配置分页数据
+	int pageSize = productList.size() > 1 ? productList.size() : 10;
+	Pageable pageAble = PageRequest.of(0, pageSize);
+	pageProduct = new PageImpl<Product>(productList, pageAble, total);
+
+	return pageProduct;
+}
